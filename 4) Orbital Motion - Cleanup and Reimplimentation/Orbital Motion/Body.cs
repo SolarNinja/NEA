@@ -218,7 +218,10 @@ namespace Orbital_Motion
 
                         if (startingGravitationalPotentialEnergy != NullValue)
                         {
-                            // Do nothing, it's fine.
+                            if (startingRelativeAbsPosition == NullValue)
+                            {
+                                startingRelativeAbsPosition = -1 * G * parentBody[2] * Mass / startingGravitationalPotentialEnergy;
+                            }
                         }
                         else
                         {
@@ -238,7 +241,10 @@ namespace Orbital_Motion
 
                         if (startingKineticEnergy != NullValue)
                         {
-                            // Do nothing, it's fine.
+                            if (startingRelativeAbsVelocity == NullValue)
+                            {
+                                startingRelativeAbsVelocity = Math.Sqrt(2 * startingKineticEnergy / Mass);
+                            }
                         }
                         else
                         {
@@ -246,7 +252,7 @@ namespace Orbital_Motion
 
                             if (startingRelativeAbsVelocity != NullValue)
                             {
-                                startingKineticEnergy = 0.5 * Mass * Vector3.Dot(startingRelativeVelocity, startingRelativeVelocity);
+                                startingKineticEnergy = 0.5 * Mass * Math.Pow(startingRelativeAbsVelocity, 2);
                             }
                             else
                             {
@@ -363,13 +369,12 @@ namespace Orbital_Motion
                 }
                 else
                 {
-                    if (inclination == 0)
+                    if (this.inclination == 0 || this.inclination == Math.PI)
                     {
                         this.longitudeOfAscendingNode = 0;
                     }
                     else
                     {
-                        if (n != nullVector3)
                         if (n.Y >= 0)
                         {
                             this.longitudeOfAscendingNode = Math.Acos(n.X / n.Length());
@@ -388,7 +393,7 @@ namespace Orbital_Motion
                 }
                 else if (startingRelativePosition != NullVector3 && startingRelativeVelocity != NullVector3)
                 {
-                    if (inclination == 0)
+                    if (this.inclination == 0 || this.inclination == Math.PI)
                     {
                         this.argumentOfPeriapsis = 0;
                     }

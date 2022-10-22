@@ -30,7 +30,7 @@ namespace Orbital_Motion
 
         //Body body = new Body(relativePosition, velocity, 420000, sun);
 
-        Body body = new Body(sun, relativePosition, velocity, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, 0, NullValue, NullValue, NullValue, NullValue, NullValue, 420000, NullValue, NullValue, NullValue, NullValue, NullVector3);
+        Body body = new Body(sun, 420000, 0, relativePosition, velocity, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullValue, NullVector3);
 
         private void Form1_Click(object sender, EventArgs e)
         {
