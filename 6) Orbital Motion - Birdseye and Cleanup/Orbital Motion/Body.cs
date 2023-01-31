@@ -602,6 +602,8 @@ namespace Orbital_Motion
                 predeterminedPoints[i + 1] = new pointInformation(orbitalPeriod - negativeTime, angularVelocity, negativeTrueAnomaly, negativeRelativePosition, negativeRelativeVelocity);
             }
 
+            predeterminedPoints = predeterminedPoints.OrderBy(new Func<pointInformation, double>(x => x.time)).ToArray();
+
             return predeterminedPoints;
 
             // Repeating times at 9998 and 10002?

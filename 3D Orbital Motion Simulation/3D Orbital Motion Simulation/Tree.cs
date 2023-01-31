@@ -71,7 +71,8 @@ namespace _3D_Orbital_Motion_Simulation
         public void AddToTree(string newBodyName, double newBodyMass, int time, Vector3 currentRelativeVelocity, Vector3 currentAbsolutePosition)
         {
             Tree thisTree = this;
-            FindAndPopulatePosition(ReferenceBody, currentAbsolutePosition);
+            Vector3 currentCalculatedPosition = currentAbsolutePosition - ((FixedBody)ReferenceBody.assignedBody).position;
+            FindAndPopulatePosition(ReferenceBody, currentCalculatedPosition);
 
             void FindAndPopulatePosition(Node parentNode, Vector3 currentCalculatedPosition)
             {
@@ -206,7 +207,7 @@ namespace _3D_Orbital_Motion_Simulation
                 }
             }
 
-            List<KeyValuePair<Body, Vector3>> bodies = new List<KeyValuePair<Body, Vector3>> { new KeyValuePair<Body, Vector3>(ReferenceBody.assignedBody, ((FixedBody)ReferenceBody.assignedBody).position) };
+            List<KeyValuePair<Body, Vector3>> bodies = new List<KeyValuePair<Body, Vector3>>();
 
             foreach (KeyValuePair<Node, Vector3> nodeAndAbsolutePosition in visitedNodes)
             {
@@ -214,6 +215,11 @@ namespace _3D_Orbital_Motion_Simulation
             }
 
             return bodies;
+        }
+
+        public void debug()
+        {
+
         }
     }
 }
