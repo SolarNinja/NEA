@@ -18,19 +18,17 @@ namespace Orbital_Motion
     {
         // This code is a right mess.
 
-        record pointInformation(double time, double angularVelocity, double trueAnomaly, Vector3 relativePosition, Vector3 relativeVelocity);
+        private record pointInformation(double time, double angularVelocity, double trueAnomaly, Vector3 relativePosition, Vector3 relativeVelocity);
 
-        private int NullValue = Globals.NullValue;
-        private Vector3 NullVector3 = Globals.NullVector3;
+        static private int NullValue = Globals.NullValue;
+        static private Vector3 NullVector3 = Globals.NullVector3;
 
-        private Vector3 relativePosition;
-        private Vector3 relativeVelocity;
-        private Vector3 relativePolarPosition;
+        private pointInformation currentPoint;
 
         // Constants
         double Mass;
         double TotalEnergy, AngularMomentum;
-        Vector3 SpecificAngularMomentum;
+        Vector3 SpecificAngularMomentum, eccentricityVector, startingRelativePosition, startingRelativeVelocity;
         static double G = 6.67 * Math.Pow(10, -11);
 
         // Psuedo-constants (constant unless a change in orbit occurs)
@@ -47,10 +45,15 @@ namespace Orbital_Motion
                     double periapsis, double apoapsis, double TotalEnergy, double startingKineticEnergy,
                     double startingGravitationalPotentialEnergy, double AngularMomentum, Vector3 SpecificAngularMomentum)
         {
-            // This likely has redundant cases, so it may be worth double checking this later.
-            // Also add checks later to make sure that all inputted data is consistent.
             double startingPerpendicularAbsVelocity = NullValue;
             double startingRelativeAbsPosition = NullValue;
+
+            HandleInputs();
+
+            predeterminedPoints = createPoints(20000, parentBody, startingRelativeAbsPosition, startingAngleOfSpeed, eccentricityVector, ref orbitalPeriod);
+
+            // This likely has redundant cases, so it may be worth double checking this later.
+            // Also add checks later to make sure that all inputted data is consistent.
             void HandleInputs()
             {
                 // A user may input various variables but together they do not uniquely define an orbit. This carries all possible variables that could be assigned too which, if inputted, would uniquely identify the orbit.
@@ -61,6 +64,7 @@ namespace Orbital_Motion
                 if (startingRelativePosition != NullVector3)
                 {
                     startingRelativeAbsPosition = startingRelativePosition.Length();
+                    this.startingRelativePosition = startingRelativePosition;
                 }
                 else if (startingRelativeDistance != NullValue)
                 {
@@ -72,6 +76,7 @@ namespace Orbital_Motion
                 if (startingRelativeVelocity != NullVector3)
                 {
                     startingRelativeAbsVelocity = startingRelativeVelocity.Length();
+                    this.startingRelativeVelocity = startingRelativeVelocity;
                 }
                 else if (startingRelativeSpeed != NullValue)
                 {
@@ -108,10 +113,10 @@ namespace Orbital_Motion
                 // e is the eccentricity vector, a vector with no unit that points from apoapsis to periapsis with magnitude equal to scalar eccentricity.
                 // It is important to note this can only be calculated knowing the starting vectors, but this can still be bipassed by knowing the LoP/ 
                 // This is also used for the following equations.
-                Vector3 e = NullVector3;
+                eccentricityVector = NullVector3;
                 if (startingRelativePosition != NullVector3 && startingRelativeVelocity != NullVector3)
                 {
-                    e = Vector3.Divide(Vector3.Cross(startingRelativeVelocity, this.SpecificAngularMomentum), Convert.ToSingle(G * parentBody[2])) - Vector3.Divide(startingRelativePosition, Convert.ToSingle(startingRelativeDistance));
+                    eccentricityVector = Vector3.Divide(Vector3.Cross(startingRelativeVelocity, this.SpecificAngularMomentum), Convert.ToSingle(G * parentBody[2])) - Vector3.Divide(startingRelativePosition, Convert.ToSingle(startingRelativeAbsPosition));
                 }
 
                 // The angle between the +x direction and the ascending node.
@@ -138,16 +143,16 @@ namespace Orbital_Motion
                     }
                 }
 
-                // The angle between the +x direction and the periapsis. This is being used as if inclination == 0 the argument of periapsis defaults to 0 w
+                // The angle between the +x direction and the periapsis. This is being used as if inclination == 0 the argument of periapsis defaults to 0.
                 if (argumentOfPeriapsis != NullValue)
                 {
                     this.argumentOfPeriapsis = argumentOfPeriapsis;
                 }
-                else 
+                else
                 {
                     if (this.inclination == 0 || this.inclination == Math.PI)
                     {
-                        // Given an inclination of 0 this will be reassigned to later, given its use of eccentricity.
+                        // Given an inclination of 0 this will be reassigned to later, given its use of nodes.
                         this.argumentOfPeriapsis = 0;
                     }
                     else if (longitudeOfPeriapsis != NullValue && this.longitudeOfAscendingNode != NullValue)
@@ -156,9 +161,9 @@ namespace Orbital_Motion
                     }
                     else
                     {
-                        this.argumentOfPeriapsis = Math.Acos(Vector3.Dot(n, e) / (n.Length() * e.Length()));
+                        this.argumentOfPeriapsis = Math.Acos(Vector3.Dot(n, eccentricityVector) / (n.Length() * eccentricityVector.Length()));
 
-                        if (e.Z < 0)
+                        if (eccentricityVector.Z < 0)
                         {
                             this.argumentOfPeriapsis = 2 * Math.PI - this.argumentOfPeriapsis;
                         }
@@ -197,7 +202,7 @@ namespace Orbital_Motion
                         // This rotates the orbit along it's node line (the x axis), hence giving a flat orbit.
                         double angleFromInclination = 2 * Math.PI - this.inclination;
                         Matrix3x3 rotationMatrixForInclination = new Matrix3x3(new double[,] { { 1, 0, 0 }, { 0, Math.Cos(angleFromInclination), Math.Sin(angleFromInclination) }, { 0, -Math.Sin(angleFromInclination), Math.Cos(angleFromInclination) } });
-                        
+
                         flattenedRelativeStartPosition = rotationMatrixForInclination.Transform(flattenedRelativeStartPosition);
                         flattenedRelativeStartVelocity = rotationMatrixForInclination.Transform(flattenedRelativeStartVelocity);
 
@@ -324,13 +329,9 @@ namespace Orbital_Motion
                 }
                 else
                 {
-                    if (semiMajorAxis != NullValue && eccentricity != NullValue)
+                    if (this.semiMajorAxis != NullValue && this.eccentricity != NullValue)
                     {
                         this.semiMinorAxis = this.semiMajorAxis * Math.Sqrt(1 - Math.Pow(eccentricity, 2));
-                    }
-                    else
-                    {
-
                     }
                 }
 
@@ -436,7 +437,11 @@ namespace Orbital_Motion
                     }
                 }
 
-                TotalEnergyAndAngularMomentum();
+                // Make this a function for total energy and a function for angular momentum and treat seperately.
+                if (this.TotalEnergy == NullValue || this.AngularMomentum == NullValue)
+                {
+                    TotalEnergyAndAngularMomentum();
+                }
 
                 // This is the shortest distance from the parent body.
                 if (periapsis != NullValue)
@@ -445,7 +450,7 @@ namespace Orbital_Motion
                 }
                 else
                 {
-                    this.periapsis = this.semiMajorAxis * (1 - this.eccentricity) + 0.01;
+                    this.periapsis = this.semiMajorAxis * (1 - this.eccentricity) + 0.0001;
                 }
 
                 // This is the largest distance from the parent body.
@@ -455,24 +460,17 @@ namespace Orbital_Motion
                 }
                 else
                 {
-                    this.apoapsis = this.semiMajorAxis * (1 + this.eccentricity) - 0.01;
+                    this.apoapsis = this.semiMajorAxis * (1 + this.eccentricity) - 0.0001;
                 }
 
-                relativePosition = startingRelativePosition;
-                relativeVelocity = startingRelativeVelocity;
-                this.timeOffset = timeOffset;
                 this.Mass = Mass;
+                this.timeOffset = timeOffset;
+                currentPoint = new pointInformation(timeOffset, NullValue, NullValue, startingRelativePosition, startingRelativeVelocity);
             }
-
-            HandleInputs();
-
-            predeterminedPoints = createPoints(10000, parentBody, startingRelativeAbsPosition, ref orbitalPeriod);
         }
 
-        private pointInformation[] createPoints(int numberOfIntervals, double[] parentBody, double startDistance, ref double orbitalPeriod)
+        private pointInformation[] createPoints(int numberOfIntervals, double[] parentBody, double startingDistance, double startingAngleOfSpeed, Vector3 eccentricityVector, ref double orbitalPeriod)
         {
-            Dictionary<int, double[]> predeterminedDistances = new Dictionary<int, double[]>();
-
             // V is the specific energy.
             double V = TotalEnergy / Mass;
 
@@ -488,96 +486,152 @@ namespace Orbital_Motion
             // U is a variable determined by r; midpointAdjustedU is hence a variable determined by midpointDistance.
             double midpointAdjustedU = 2 * V * Math.Pow(midpointDistance, 2) + 2 * G * parentBody[2] * midpointDistance - Math.Pow(A, 2);
 
+            decimal testvar1 = Convert.ToDecimal(2 * V * Math.Pow(periapsis, 2));
+
+            decimal testvar2 = Convert.ToDecimal(2 * G * parentBody[2] * periapsis);
+
+            decimal testvar3 = Convert.ToDecimal(Math.Pow(A, 2));
+
+            decimal testvar4 = testvar1 + testvar2;
+
             // U is a variable determined by r; periapsisU is hence a variable determined by periapsis.
-            double periapsisU = 2 * V * Math.Pow(periapsis, 2) + 2 * G * parentBody[2] * periapsis - Math.Pow(A, 2);
+            decimal periapsisU = testvar4 - testvar3;
+
+            double periapsisU2 = Convert.ToDouble(periapsisU);
 
             // midpointTimeAdjustment is the time added to the second equation for time too adjust for the discontinuity in the graphs.
             double midpointTimeAdjustment = -2 * G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * midpointAdjustedU / K), 5)));
 
             // orbitalPeriod is the total time taken to complete one orbit.
-            orbitalPeriod = 2 * (G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * periapsisU / K), 5))) + 1 / (2 * V) * Math.Sqrt(periapsisU) + midpointTimeAdjustment);
+            orbitalPeriod = 2 * (G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * periapsisU2 / K), 7))) + 1 / (2 * V) * Math.Sqrt(periapsisU2) + midpointTimeAdjustment);
 
             double range = apoapsis - periapsis;
 
             // Given that the position the body starts at is not the apoapsis, there is an offset in the time from the natural time given from starting at apoapsis.
             double startPositionTimeOffset = 0;
-            // When calculating the offset at apoapsis or periapsis please slightly align based on them to not cause errors? + for peri - for apo
-            CalculatePoint(startDistance - 0.0001, startPositionTimeOffset, orbitalPeriod, out startPositionTimeOffset);
+            // If at the extremes errors occur right on those edges. This means a small offset is given to keep the edgecases from throwing errors.
+            if (startingDistance <= periapsis)
+            {
+                CalculatePoint(startingDistance + 0.0002, startPositionTimeOffset, orbitalPeriod, true, false, out startPositionTimeOffset);
+            }
+            else if (startingDistance >= apoapsis)
+            {
+                CalculatePoint(startingDistance - 0.0002, startPositionTimeOffset, orbitalPeriod, true, false, out startPositionTimeOffset);
+            }
+            else
+            {
+                CalculatePoint(startingDistance, startPositionTimeOffset, orbitalPeriod, true, false, out startPositionTimeOffset);
+            }
 
             // When at a non-inclined orbit, standard methods of calculating the argument of periapsis do not work due to their reliance on the ascending node's position.
             // A different method can be used; given a starting position you can calculate it's angle from the positive x direction as well as its true anomaly, hence finding the difference to calculate the overall offset.
-
-            // Check whether this deals with +-
-            double startingTrueAnomaly = Math.Acos((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - startDistance) / (eccentricity * startDistance)); ;
-            if (inclination == 0 || inclination == 2 * Math.PI)
+            // Note that strictly speaking given the definition of the AoP, this angle is to the ascending node; in this situation it is a psuedo-node for there is no inclination.
+            bool flippedStartingTrueAnomaly = false;
+            bool velocityAntiClockwise = false;
+            if (inclination == 0 || inclination == Math.PI)
             {
-                double acuteAngle = Math.Atan(Math.Abs(relativePosition.Y / relativePosition.X));
-                if (relativePosition.X >= 0 && relativePosition.Y >= 0)
+                // 2pi - or pi +?
+                //Note this first equation probably better as it doesn't require the eccentricity vector breaking it's scope.
+                //double startingTrueAnomaly = Math.Acos(Math.Round((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - startingDistance) / (eccentricity * startingDistance), 5));
+
+                //Starting true anomaly giving an incorrect value; I believe it may be giving it's answers between positive and negative pi, but taking the absolute value of that answer.
+                double startingTrueAnomaly = Math.Acos(Vector3.Dot(eccentricityVector, startingRelativePosition) / (eccentricityVector.Length() * startingRelativePosition.Length()));
+                if (startingAngleOfSpeed < Math.PI / 2 || startingAngleOfSpeed > Math.PI * 1.5)
                 {
-                    argumentOfPeriapsis = acuteAngle - startingTrueAnomaly;
+                    //startingTrueAnomaly = 2 * Math.PI - startingTrueAnomaly;
+                    //velocityAntiClockwise = true;
                 }
-                else if (relativePosition.X < 0 && relativePosition.Y >= 0)
+
+                if (Vector3.Dot(startingRelativePosition, startingRelativeVelocity) < 0)
                 {
-                    argumentOfPeriapsis = Math.PI - acuteAngle - startingTrueAnomaly;
+                    startingTrueAnomaly = 2 * Math.PI - startingTrueAnomaly;
+                    flippedStartingTrueAnomaly = true;
+                    //velocityAntiClockwise = true;
                 }
-                else if (relativePosition.X < 0 && relativePosition.Y < 0)
-                {
-                    argumentOfPeriapsis = Math.PI + acuteAngle - startingTrueAnomaly;
-                }
-                else if (relativePosition.X >= 0 && relativePosition.Y < 0)
-                {
-                    argumentOfPeriapsis = 2 * Math.PI - acuteAngle - startingTrueAnomaly;
-                }
+
+                double currentX = currentPoint.relativePosition.X;
+                double currentY = currentPoint.relativePosition.Y;
+
+                //double acuteAngle = (2*Math.PI + Math.Atan2(currentY, currentX)) % Math.PI;
+                double acuteAngle = Math.Atan2(currentY, currentX);
+                //argumentOfPeriapsis = (2 * Math.PI + acuteAngle - startingTrueAnomaly) % (2 * Math.PI);
+                //argumentOfPeriapsis = (acuteAngle - startingTrueAnomaly);
+                argumentOfPeriapsis = (acuteAngle - startingTrueAnomaly);
             }
 
-            // Might work at half cant remember test later.
-            for (int i = 0; i < 2 * numberOfIntervals; i += 2)
+            bool positive = true;
+            if (flippedStartingTrueAnomaly)
             {
-                double R = periapsis + i * range / (2 * numberOfIntervals);
-                double time;
-                CalculatePoint(R, startPositionTimeOffset, orbitalPeriod, out time);
-
-                predeterminedDistances.Add(i, new double[] { R, time });
-                predeterminedDistances.Add(i + 1, new double[] { R, orbitalPeriod - time });
+                positive = false;
             }
 
-            pointInformation[] predeterminedPoints = new pointInformation[predeterminedDistances.Count];
-            foreach (var point in predeterminedDistances)
+            pointInformation[] predeterminedPoints = new pointInformation[numberOfIntervals];
+            for (int i = 0; i < numberOfIntervals; i += 2)
             {
-                double time = point.Value[1];
+                // Points lie both above and below the semi-major axis line, hence a positive and negative case need to be created.
+                double R = periapsis + i * range / numberOfIntervals;
 
-                double trueAnomaly = Math.Acos((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - point.Value[0]) / (eccentricity * point.Value[0]));
+                double positiveTime;
+                double negativeTime;
 
-                double angularVelocity = Math.Acos(AngularMomentum / Math.Sqrt(2 * TotalEnergy * Mass * Math.Pow(point.Value[0], 2) + 2 * G * parentBody[2] * Math.Pow(Mass, 2) * point.Value[0]));
+                CalculatePoint(R, startPositionTimeOffset, orbitalPeriod, positive, velocityAntiClockwise, out positiveTime);
+                CalculatePoint(R, startPositionTimeOffset, orbitalPeriod, !positive, velocityAntiClockwise, out negativeTime);
 
-                Vector3 relativePosition = new Vector3(Convert.ToSingle(point.Value[0] * Math.Cos(trueAnomaly)), Convert.ToSingle(point.Value[0] * Math.Sin(trueAnomaly)), 0);
+                /*if (Math.Abs(positiveTime) < 5 || Math.Abs(negativeTime) < 5)
+                {
+                    // Inclination is flipping the start location because it is.
+                }*/
 
-                float perpendicularVelocity = Convert.ToSingle(AngularMomentum / (Mass * point.Value[0]));
-                float totalVelocitySquared = Convert.ToSingle((2 * TotalEnergy * point.Value[0] + 2 * G * parentBody[2]) / (Mass * point.Value[0]));
-                //float totalVelocitySquared = Convert.ToSingle(Math.Sqrt(G * parentBody[2] / pointInformation[0]));
-                Vector3 relativeVelocity = new Vector3(perpendicularVelocity, Convert.ToSingle(Math.Sqrt(Math.Pow(perpendicularVelocity, 2) - totalVelocitySquared)), 0);
+                double angularVelocity = Math.Acos(AngularMomentum / Math.Sqrt(2 * TotalEnergy * Mass * Math.Pow(R, 2) + 2 * G * parentBody[2] * Math.Pow(Mass, 2) * R));
 
-                RotatePoint(ref relativePosition, ref relativeVelocity);
+                double positiveTrueAnomaly = Math.Acos((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - R) / (eccentricity * R));
+                double negativeTrueAnomaly = 2 * Math.PI - positiveTrueAnomaly;
 
-                predeterminedPoints[point.Key] = new pointInformation(time, angularVelocity, trueAnomaly, relativePosition, relativeVelocity);
+                Vector3 positiveRelativePosition = new Vector3(Convert.ToSingle(R * Math.Cos(positiveTrueAnomaly)), Convert.ToSingle(R * Math.Sin(positiveTrueAnomaly)), 0);
+                Vector3 negativeRelativePosition = new Vector3(Convert.ToSingle(R * Math.Cos(negativeTrueAnomaly)), Convert.ToSingle(R * Math.Sin(negativeTrueAnomaly)), 0);
+
+                float perpendicularVelocity = Convert.ToSingle(AngularMomentum / (Mass * R));
+                float totalVelocitySquared = Convert.ToSingle((2 * TotalEnergy + 2 * G * parentBody[2]) / R);
+                Vector3 positiveRelativeVelocity = new Vector3(perpendicularVelocity, Convert.ToSingle(Math.Sqrt(Math.Pow(perpendicularVelocity, 2) - totalVelocitySquared)), 0);
+                Vector3 negativeRelativeVelocity = new Vector3(-perpendicularVelocity, Convert.ToSingle(Math.Sqrt(totalVelocitySquared - Math.Pow(perpendicularVelocity, 2))), 0);
+
+                RotatePoint(ref positiveRelativePosition, ref positiveRelativeVelocity);
+                RotatePoint(ref negativeRelativePosition, ref negativeRelativeVelocity);
+
+                predeterminedPoints[i] = new pointInformation(positiveTime, angularVelocity, positiveTrueAnomaly, positiveRelativePosition, positiveRelativeVelocity);
+                predeterminedPoints[i + 1] = new pointInformation(orbitalPeriod - negativeTime, angularVelocity, negativeTrueAnomaly, negativeRelativePosition, negativeRelativeVelocity);
             }
 
             return predeterminedPoints;
 
-            void CalculatePoint(double R, double startPositionTimeOffset, double orbitalPeriod, out double time)
+            // Repeating times at 9998 and 10002?
+            void CalculatePoint(double R, double startPositionTimeOffset, double orbitalPeriod, bool positive, bool velocityAntiClockwise, out double time)
             {
                 double U = 2 * V * Math.Pow(R, 2) + 2 * G * parentBody[2] * R - Math.Pow(A, 2);
-                time = 0;
 
-                // I actually believe this to be more efficient than defining repeating parts as it saves on read-writes.
-                // Also note the use of the round; this is because an error would occur at halfway where, due to precision errors, the arcsin would recieve a value ever so slightly above 1. I might need to revisit this error to make it's handling more efficient.
+                // Note the use of the round; this is because an error would occur at halfway where, due to precision errors, the arcsin would recieve a value ever so slightly above 1. I might need to revisit this error to make it's handling more efficient.
+                /*if (R < midpointDistance)
+                {
+                    time = (-1 * G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + timeOffset + orbitalPeriod + Math.Pow(-1, Convert.ToInt16(positive)) * startPositionTimeOffset) % orbitalPeriod;
+                }
+                else
+                {
+                    time = (G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + midpointTimeAdjustment + timeOffset + orbitalPeriod + Math.Pow(-1, Convert.ToInt16(positive)) * startPositionTimeOffset) % orbitalPeriod;
+                }*/
+
+
                 if (R < midpointDistance)
                 {
-                    time = Math.Abs(-1 * G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + timeOffset - startPositionTimeOffset) % orbitalPeriod;
+                    time = (-1 * G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + timeOffset + orbitalPeriod + Math.Pow(-1, Convert.ToInt16(positive)) * startPositionTimeOffset) % orbitalPeriod;
                 }
-                else if (R >= midpointDistance)
+                else
                 {
-                    time = Math.Abs(G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + midpointTimeAdjustment + timeOffset - startPositionTimeOffset) % orbitalPeriod;
+                    time = (G * parentBody[2] / (4 * V) * (Math.Sqrt(-2 / V) * Math.Asin(Math.Round(Math.Sqrt(-2 * V * U / K), 5))) + 1 / (2 * V) * Math.Sqrt(U) + midpointTimeAdjustment + timeOffset + orbitalPeriod + Math.Pow(-1, Convert.ToInt16(positive)) * startPositionTimeOffset) % orbitalPeriod;
+                } 
+
+                if (velocityAntiClockwise)
+                {
+                    time = (2 * orbitalPeriod - time) % orbitalPeriod;
                 }
             }
 
@@ -592,71 +646,51 @@ namespace Orbital_Motion
                 // This rotates the orbit to be the correct inclination.
                 Matrix3x3 rotationMatrixForInclination = new Matrix3x3(new double[,] { { 1, 0, 0 }, { 0, Math.Cos(inclination), Math.Sin(inclination) }, { 0, -Math.Sin(inclination), Math.Cos(inclination) } });
 
-                relativePosition = rotationMatrixForInclination.Transform(relativePosition);
-                relativeVelocity = rotationMatrixForInclination.Transform(relativeVelocity);
+                //relativePosition = rotationMatrixForInclination.Transform(relativePosition);
+                //relativeVelocity = rotationMatrixForInclination.Transform(relativeVelocity);
 
                 // This rotates the orbit such that the ascending node is at the correct angle to the positive x direction.
                 Matrix3x3 rotationMatrixForAscendingNode = new Matrix3x3(new double[,] { { Math.Cos(longitudeOfAscendingNode), Math.Sin(longitudeOfAscendingNode), 0 }, { -Math.Sin(longitudeOfAscendingNode), Math.Cos(longitudeOfAscendingNode), 0 }, { 0, 0, 1 } });
 
                 relativePosition = rotationMatrixForAscendingNode.Transform(relativePosition);
-                relativeVelocity = rotationMatrixForAscendingNode.Transform(relativeVelocity);
+                relativeVelocity = rotationMatrixForAscendingNode.Transform(relativeVelocity); 
             }
         }
 
-        // When calculating position, rotate based on argument of periapsis then inclination then longitude of ascending node
-        // For an equatorial or retrograde orbit, calculate longitude of periapsis through a different method and rotate once based on that.
-        /*public void returnValues(double time, double[] parentBody, out Vector2 radialPositionOut, out Vector2 relativeVelocity, out double angularVelocity)
+        public void updateVariables(double time)
         {
-            double predeterminedMethod()
+            double[] predeterminedAdjustedTimes = new double[predeterminedPoints.Count()];
+
+            time = (time - timeOffset) % orbitalPeriod;
+
+            int count = 0;
+            foreach (pointInformation point in predeterminedPoints)
             {
-                double[] predeterminedAdjustedTimes = new double[predeterminedPoints.Count];
-
-                time %= orbitalPeriod;
-
-                int count = 0;
-                foreach (var point in predeterminedPoints)
-                {
-                    predeterminedAdjustedTimes[count] = Math.Abs(predeterminedPoints[count][1] - time);
-                    count++;
-                }
-
-                double[] predeterminedPoint = predeterminedPoints[Array.IndexOf(predeterminedAdjustedTimes, predeterminedAdjustedTimes.Min())];
-                return predeterminedPoint[0];
+                predeterminedAdjustedTimes[count] = Math.Abs(point.time - time);
+                count++;
             }
 
-            double distance = predeterminedMethod();
+            currentPoint = predeterminedPoints[Array.IndexOf(predeterminedAdjustedTimes, predeterminedAdjustedTimes.Min())];
+        }
 
-            double angle;
-
-            // Like before, I actually believe this to be more efficient than defining repeating parts as it saves on read-writes.
-            if (time < orbitalPeriod / 2)
-            {
-                angle = Math.Acos((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - distance) / (eccentricity * distance));
-            }
-            else
-            {
-                angle = Math.Acos((semiMajorAxis * (1 - Math.Pow(eccentricity, 2)) - distance) / (eccentricity * distance));
-            }
-
-            float perpendicularVelocity = Convert.ToSingle(AngularMomentum / (Mass * distance));
-            //float totalVelocitySquared = Convert.ToSingle((2 * TotalEnergy * distance + 2 * G * parentBody[2]) / (Mass * distance));
-            float totalVelocitySquared = Convert.ToSingle(Math.Sqrt(G * parentBody[2] / distance));
-
-            relativeVelocity = new Vector2(perpendicularVelocity, Convert.ToSingle(Math.Sqrt(Math.Pow(perpendicularVelocity, 2) - totalVelocitySquared)));
-
-            angularVelocity = Math.Acos(AngularMomentum / Math.Sqrt(2 * TotalEnergy * Mass * Math.Pow(distance, 2) + 2 * G * parentBody[2] * Math.Pow(Mass, 2) * distance));
-
-            //relativePolarPosition = new Vector2(Convert.ToSingle(distance), Convert.ToSingle(angle));
-
-            //radialPositionOut = relativePolarPosition;
-
-            convertToCartesian(parentBody, angle);
-        }*/
-
-        private void convertToCartesian(double[] parentBody, double angle)
+        public Vector3 getRelativePosition()
         {
-            relativePosition.X = Convert.ToSingle(parentBody[0] - Math.Cos(relativePolarPosition.Y) * relativePolarPosition.X);
-            relativePosition.Y = Convert.ToSingle(parentBody[1] - Math.Sin(relativePolarPosition.Y) * relativePolarPosition.X);
+            return currentPoint.relativePosition;
+        }
+
+        public Vector3 getRelativeVelocity()
+        {
+            return currentPoint.relativeVelocity;
+        }
+
+        public double getTime()
+        {
+            return currentPoint.time;
+        }
+
+        public double getTrueAnomaly()
+        {
+            return currentPoint.trueAnomaly;
         }
     }
 }

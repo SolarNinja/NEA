@@ -1,0 +1,19 @@
+Take in a record of the known values.
+Using that, make a binary number where each bit represents a variable such that a one represents it is known and a 0 represents it is unknown.
+Itterate through the unknown variables, specifically their binary numbers which represent possible components.
+If a bitwise AND with that function number and the known variables returns the function number, you can calculate the variable.
+If not, continue.
+Lets say a is made of b and c, and c is made of d and e. Assuming you know bde, you know a, but a only has a function represented by b and c. This is why iteration is used to check whether creating a later variable (in this case c) now allows for a previously checked variable (in this case a) to be made.
+There are 2 end conditions to the While loop; there are no more unknown variables (hence a success) or no new variables were calculated in an interation (hence there is not enough information)
+
+Pros:   Simpler to write
+	Quite elegant of a solution
+	Fast
+	Dynamic; the method works no matter what variables and functions you give it
+	A lot easier to write documentation for as it is an actual method and not a hard coded set of if statements 
+
+Cons:   There needs to be a hard coded table of all the variables components
+	There is a small amount of redundant checking e.g. a might be made of b and c and you make c later, but you still check a first before c is created.
+	
+
+Credit to Julian Knight for the method. 

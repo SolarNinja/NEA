@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Numerics;
-using System.Text;
-using System.Windows.Forms;
+﻿using System.Numerics;
 
-namespace Orbital_Motion
+namespace _3D_Orbital_Motion_Simulation
 {
     internal struct Matrix3x3
     {
