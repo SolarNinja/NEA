@@ -125,19 +125,20 @@ namespace _3D_Orbital_Motion_Simulation
             }
         }
 
-        public void AddToTree(List<string> heritage, Body newBody)
+        public void AddToTree(List<string> heritage, string newBodyName, double newBodyMass, int startingTimeFromEpoch, double startingTrueAnomaly, double semiMajorAxis, double eccentricity, double inclination, double longitudeOfAscendingNode, double argumentOfPeriapsis)
         {
             // Starts at a given node, and follows a path to the newBody's parent node. Once there, the parent node is given the new body as a child node.
 
             // Could have used node heritage instead of searching from a tailed path; chose not too as it would require passing a recursion count as to check a specific list index, or to linearly search said list for the node of same name.
-            void FindAndPopulatePosition(Node parentNode, List<string> path, Body newBody)
+            Tree thisTree = this;
+            void FindAndPopulatePosition(Node parentNode, List<string> path)
             {
                 if (path.Count > 1)
                 {
                     int childNodePosition = parentNode.childNodes.FindIndex(child => child.assignedBody.name == path[1]);
                     if (childNodePosition != -1)
                     {
-                        FindAndPopulatePosition(parentNode.childNodes[childNodePosition], path.Skip(1).ToList(), newBody);
+                        FindAndPopulatePosition(parentNode.childNodes[childNodePosition], path.Skip(1).ToList());
                     }
                     else
                     {
@@ -147,9 +148,29 @@ namespace _3D_Orbital_Motion_Simulation
                 }
                 else if (path.Count == 1)
                 {
-                    if (parentNode.childNodes.FindIndex(child => child.assignedBody.name == newBody.name) == -1)
+                    if (parentNode.childNodes.FindIndex(child => child.assignedBody.name == newBodyName) == -1)
                     {
-                        parentNode.AddChild(new Node(newBody));
+                        bool failed = false;
+
+                        double hillSphereRadius;
+                        Vector3 parentPosition;
+                        if (parentNode.assignedBody.GetType() == typeof(MovingBody))
+                        {
+                            hillSphereRadius = ((MovingBody)parentNode.assignedBody).orbitInformation.hillSphereRadius;
+                            parentPosition = ((MovingBody)parentNode.assignedBody).currentPoint.relativePosition;
+                        }
+                        else
+                        {
+                            hillSphereRadius = double.PositiveInfinity;
+                            parentPosition = ((FixedBody)parentNode.assignedBody).position;
+                        }
+
+                        MovingBody newBody = new MovingBody(ref failed, thisTree, newBodyName, newBodyMass, parentNode.assignedBody.Mass, hillSphereRadius, parentPosition, startingTimeFromEpoch, startingTrueAnomaly, semiMajorAxis, eccentricity, inclination, longitudeOfAscendingNode, argumentOfPeriapsis);
+
+                        if (!failed)
+                        {
+                            parentNode.AddChild(new Node(newBody));
+                        }
                     }
                     else
                     {
@@ -159,10 +180,10 @@ namespace _3D_Orbital_Motion_Simulation
                 }
             }
 
-            FindAndPopulatePosition(ReferenceBody, heritage, newBody);
+            FindAndPopulatePosition(ReferenceBody, heritage);
         }
 
-        public void UpdateBodies(int time)
+        public void UpdateBodies(ulong time)
         {
             Queue<Node> queue = new Queue<Node>();
             List<Node> visitedNodes = new List<Node>();
